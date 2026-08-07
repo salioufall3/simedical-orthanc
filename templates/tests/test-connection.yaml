@@ -8,8 +8,9 @@ metadata:
     "helm.sh/hook": test
 spec:
   containers:
-    - name: wget
+    # /system exige l'auth → on vérifie juste que le port HTTP d'Orthanc répond (TCP).
+    - name: nc
       image: busybox
-      command: ['wget']
-      args: ['{{ include "simedical-orthanc.fullname" . }}:{{ .Values.service.port }}']
+      command: ['nc']
+      args: ['-z', '-v', '{{ include "simedical-orthanc.fullname" . }}', '{{ .Values.service.http.port }}']
   restartPolicy: Never

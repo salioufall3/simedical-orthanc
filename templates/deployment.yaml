@@ -5,18 +5,21 @@ metadata:
   labels:
     {{- include "simedical-orthanc.labels" . | nindent 4 }}
 spec:
-  {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
-  {{- end }}
+  # PVC RWO + index SQLite mono-écrivain → jamais deux pods sur le même volume.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       {{- include "simedical-orthanc.selectorLabels" . | nindent 6 }}
   template:
     metadata:
-      {{- with .Values.podAnnotations }}
       annotations:
+        # Redéploie le pod quand la config Orthanc change.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- end }}
       labels:
         {{- include "simedical-orthanc.labels" . | nindent 8 }}
         {{- with .Values.podLabels }}
@@ -38,22 +41,76 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: http
-              containerPort: {{ .Values.service.port }}
+              containerPort: {{ .Values.orthanc.config.HttpPort | default 8042 }}
               protocol: TCP
+            - name: dicom
+              containerPort: {{ .Values.orthanc.config.DicomPort | default 4242 }}
+              protocol: TCP
+          {{- $es := .Values.externalSecret | default dict }}
+          {{- if $es.enabled }}
+          # RegisteredUsers + credentials S3 depuis Vault (variables ORTHANC__...).
+          # commonSecretName d'abord → le per-app `<fullname>-env` prime sur toute clé homonyme.
+          envFrom:
+            {{- if $es.commonSecretName }}
+            - secretRef:
+                name: {{ $es.commonSecretName }}
+            {{- end }}
+            - secretRef:
+                name: {{ include "simedical-orthanc.fullname" . }}-env
+          {{- end }}
+          {{- $s3 := .Values.orthanc.s3 | default dict }}
+          {{- $extra := .Values.extraEnv | default list }}
+          {{- if or $s3 $extra }}
+          # Config S3 NON secrète (ORTHANC__AWS_S3_STORAGE__*) — se combine aux
+          # credentials du coffre (envFrom) dans le même objet AwsS3Storage.
+          env:
+            {{- range $k, $v := $s3 }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+            {{- with $extra }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- end }}
           livenessProbe:
             {{- toYaml .Values.livenessProbe | nindent 12 }}
           readinessProbe:
             {{- toYaml .Values.readinessProbe | nindent 12 }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
-          {{- with .Values.volumeMounts }}
           volumeMounts:
+            - name: config
+              mountPath: /etc/orthanc/orthanc.json
+              subPath: orthanc.json
+              readOnly: true
+            - name: db
+              mountPath: {{ .Values.orthanc.config.IndexDirectory | default "/var/lib/orthanc/db" }}
+            - name: worklists
+              mountPath: {{ .Values.orthanc.config.Worklists.Database | default "/var/lib/orthanc/worklists" }}
+            {{- with .Values.volumeMounts }}
             {{- toYaml . | nindent 12 }}
-          {{- end }}
-      {{- with .Values.volumes }}
+            {{- end }}
       volumes:
+        - name: config
+          configMap:
+            name: {{ include "simedical-orthanc.fullname" . }}-config
+        - name: db
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.existingClaim | default (printf "%s-db" (include "simedical-orthanc.fullname" .)) }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: worklists
+          {{- if .Values.persistence.worklists.existingClaim }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.worklists.existingClaim }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        {{- with .Values.volumes }}
         {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

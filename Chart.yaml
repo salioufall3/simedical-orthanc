@@ -1,6 +1,10 @@
 apiVersion: v2
 name: simedical-orthanc
-description: A Helm chart for Kubernetes
+description: >-
+  SI-Medical PACS — Orthanc DICOM server (DIMSE + DICOMweb/REST/UI).
+  Index (SQLite) sur PVC, pixels DICOM sur MinIO/S3 (plugin object-storage).
+  Secrets (RegisteredUsers, credentials S3) tirés de Vault via External Secrets.
+  Encapsulé derrière ImagingPort — jamais exposé au front en direct (proxy BFF). Voir specs/31.
 
 # A chart can be either an 'application' or a 'library' chart.
 #
@@ -21,4 +25,4 @@ version: 0.1.0
 # incremented each time you make changes to the application. Versions are not expected to
 # follow Semantic Versioning. They should reflect the version the application is using.
 # It is recommended to use it with quotes.
-appVersion: "1.16.0"
+appVersion: "24.10.1"
