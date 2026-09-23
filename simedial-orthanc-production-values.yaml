@@ -67,7 +67,7 @@ externalSecret:
   storeKind: SecretStore
   storeName: vault-secret-store
   # Chemin Vault KV v2 (défaut si vide : apps/si-medical-v2/pacs/<release-namespace>/orthanc/env)
-  path: "apps/si-medical-v2/pacs/orthanc/env"
+  path: "apps/si-medical-v3/pacs/orthanc/env"
   # Secret commun optionnel (envFrom d'abord → le per-app prime).
   commonSecretName: ""
 
