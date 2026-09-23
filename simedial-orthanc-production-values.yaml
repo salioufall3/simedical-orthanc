@@ -170,6 +170,17 @@ volumeMounts: []
 
 nodeSelector: {}
 
-tolerations: []
-
-affinity: {}
+tolerations:
+  - key: "role"
+    operator: "Equal"
+    value: "services"
+    effect: "NoSchedule"
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: role
+              operator: In
+              values:
+                - services
